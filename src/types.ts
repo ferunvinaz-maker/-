@@ -9,6 +9,10 @@ export interface UserProfile {
   role: UserRole;
   grade?: Grade;
   school?: string;
+  isSubscribed?: boolean;
+  subscriptionPlan?: 'free_trial' | 'semester' | 'annual';
+  subscriptionPaymentMethod?: 'thawani' | 'school_voucher' | 'free_trial';
+  subscriptionExpiresAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -80,6 +84,12 @@ export interface Question {
   };
 }
 
+export interface WebSource {
+  title: string;
+  link: string;
+  snippet?: string;
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'tutor';
@@ -87,6 +97,8 @@ export interface ChatMessage {
   timestamp: number;
   mode?: 'explain' | 'socratic' | 'step_by_step' | 'lab';
   questionReferenceId?: string;
+  isWebSearchUsed?: boolean;
+  webSources?: WebSource[];
 }
 
 export type TutorMode = 'explain' | 'socratic' | 'step_by_step' | 'lab';

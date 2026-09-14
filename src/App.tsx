@@ -1,28 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { Grade, Subject, BloomLevel, Question } from './types';
 import { OMANI_CURRICULUM, SAMPLE_QUESTIONS_BANK, SUBJECT_METADATA } from './data/curriculumData';
-import { Header } from './components/Header';
-import { CurriculumSelector } from './components/CurriculumSelector';
 import { QuestionCard } from './components/QuestionCard';
 import { SmartTutor } from './components/SmartTutor';
 import { InteractiveWhiteboard } from './components/InteractiveWhiteboard';
 import { BloomLevelGuide } from './components/BloomLevelGuide';
 import { PrintModal } from './components/PrintModal';
-import { AuthModal } from './components/AuthModal';
+import { AuthScreen } from './components/AuthScreen';
+import { SubscriptionScreen } from './components/SubscriptionScreen';
+import { AppSidebar } from './components/AppSidebar';
 import { useAuth } from './lib/AuthContext';
 import { 
   Sparkles, 
   BookOpen, 
   MessageSquare, 
   PenTool, 
+  Printer,
   Award, 
   AlertCircle, 
   CheckCircle2, 
   RefreshCw,
-  Share2
+  Menu,
+  ChevronLeft,
+  CreditCard,
+  Layers,
+  GraduationCap,
+  School,
+  LogOut,
+  Compass,
+  Zap,
+  Info
 } from 'lucide-react';
 
 export default function App() {
+  const { currentUser, userProfile, loading, logout } = useAuth();
+
   const [selectedGrade, setSelectedGrade] = useState<Grade>(10);
   const [selectedSubject, setSelectedSubject] = useState<Subject>('physics');
   const [selectedUnitId, setSelectedUnitId] = useState<string>('g10-phy-u1');
@@ -30,15 +42,11 @@ export default function App() {
   const [customTopic, setCustomTopic] = useState<string>('');
   const [selectedBloomLevels, setSelectedBloomLevels] = useState<BloomLevel[]>([]);
   
-  const [activeTab, setActiveTab] = useState<'questions' | 'tutor' | 'whiteboard' | 'guide'>('questions');
+  const [activeTab, setActiveTab] = useState<'questions' | 'tutor' | 'whiteboard' | 'guide' | 'subscription'>('questions');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
-  const [authModalState, setAuthModalState] = useState<{ isOpen: boolean; mode: 'login' | 'register' }>({
-    isOpen: false,
-    mode: 'login',
-  });
-
-  const { currentUser, userProfile } = useAuth();
+  const [isSidebarOpenMobile, setIsSidebarOpenMobile] = useState<boolean>(false);
+  const [showWelcomeSubscriptionModal, setShowWelcomeSubscriptionModal] = useState<boolean>(false);
 
   // If a student logs in, automatically match grade if set
   useEffect(() => {
@@ -46,6 +54,18 @@ export default function App() {
       setSelectedGrade(userProfile.grade);
     }
   }, [userProfile]);
+
+  // Prompt subscription if user logs in without an active subscription
+  useEffect(() => {
+    if (currentUser && userProfile && !userProfile.isSubscribed) {
+      // Prompt modal once per session
+      const hasPrompted = sessionStorage.getItem('hasPromptedSub');
+      if (!hasPrompted) {
+        setShowWelcomeSubscriptionModal(true);
+        sessionStorage.setItem('hasPromptedSub', 'true');
+      }
+    }
+  }, [currentUser, userProfile]);
 
   // Active question selected for tutor context
   const [activeQuestionForTutor, setActiveQuestionForTutor] = useState<Question | null>(null);
@@ -124,7 +144,7 @@ export default function App() {
         bloomLevel: 'applying',
         bloomLevelArabic: 'التطبيق',
         cognitiveSkill: 'حل مسألة حسابية واستخدام القوانين',
-        questionText: `احسب القيمة المجهولة في تجربة مخبرية متعلقة بـ ${focus} إذا كانت المعطيات كالتالي:\n- القيمة الابتدائية = 24 وحدة قياسية\n- معدل التغير = 4.5 وحدة لكل ثانية\n- الفترة الزمنية المستغرقة = 8 ثوانٍ\nاحسب الناتج النهائي مع توضيح خطوات التعويض وكتابة الوحدة الدولية.`,
+        questionText: `احسب القيمة المجهولة في مسألة علمية متعلقة بـ ${focus} إذا كانت المعطيات المعملية كالتالي:\n- القيمة الابتدائية = 24 وحدة قياسية\n- معدل التغير = 4.5 وحدة لكل ثانية\n- الفترة الزمنية المستغرقة = 8 ثوانٍ\nاحسب الناتج النهائي مع توضيح خطوات التعويض وكتابة الوحدة الدولية.`,
         marks: 4,
         modelAnswer: `خطوات الحل:\n1) كتابة القانون المعتمد: القيمة النهائية = القيمة الابتدائية + (معدل التغير × الزمن)\n2) التعويض بالأرقام: الناتج = 24 + (4.5 × 8) = 24 + 36 = 60 وحدة.\n3) النتيجة النهائية: 60 مع كتابة الوحدة الدولية المناسبة.`,
         explanation: 'التطبيق يتطلب نقل المعرفة النظرية إلى موقف كمي أو حسابي واستخراج النتيجة بالوحدة الصحيحة.',
@@ -254,266 +274,370 @@ export default function App() {
     );
   };
 
+  // 1. Loading State
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 font-['Tajawal',sans-serif] text-slate-100">
+        <div className="w-14 h-14 rounded-2xl bg-linear-to-tr from-emerald-600 via-teal-600 to-cyan-700 flex items-center justify-center text-white shadow-xl shadow-emerald-500/20 ring-2 ring-emerald-400/30 animate-pulse mb-4">
+          <Sparkles className="w-7 h-7" />
+        </div>
+        <h2 className="text-xl font-black mb-1">منصة بَلُوم للعلوم • سلطنة عُمان</h2>
+        <p className="text-xs text-emerald-400">جارٍ تهيئة الجلسة والتحقق من الحساب...</p>
+      </div>
+    );
+  }
+
+  // 2. Authentication Gate: If not authenticated, display centered AuthScreen!
+  if (!currentUser) {
+    return <AuthScreen />;
+  }
+
+  const isSubscribed = !!userProfile?.isSubscribed;
+  const currentSubjectMeta = SUBJECT_METADATA[selectedSubject];
+
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 font-['Tajawal',sans-serif] text-slate-900">
+    <div className="min-h-screen bg-slate-50 font-['Tajawal',sans-serif] text-slate-900 flex">
       
       {/* Toast Notification Banner */}
       {notification && (
-        <div className="fixed bottom-5 right-5 z-50 animate-in fade-in slide-in-from-bottom-3 duration-300 max-w-md">
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-3 max-w-md w-full px-4">
           <div
-            className={`flex items-start gap-3 p-4 rounded-2xl shadow-xl border ${
+            className={`p-4 rounded-2xl shadow-xl border flex items-center gap-3 text-xs font-bold ${
               notification.type === 'success'
-                ? 'bg-emerald-900 text-white border-emerald-700'
+                ? 'bg-emerald-900 text-white border-emerald-700 shadow-emerald-900/20'
                 : notification.type === 'error'
-                ? 'bg-rose-900 text-white border-rose-700'
-                : 'bg-slate-900 text-white border-slate-700'
+                ? 'bg-rose-900 text-white border-rose-700 shadow-rose-900/20'
+                : 'bg-slate-900 text-white border-slate-700 shadow-slate-900/20'
             }`}
           >
             {notification.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            ) : notification.type === 'error' ? (
+              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
             ) : (
-              <Sparkles className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <Info className="w-5 h-5 text-teal-400 shrink-0" />
             )}
-            <p className="text-xs sm:text-sm font-bold leading-relaxed">
-              {notification.text}
-            </p>
+            <p className="leading-relaxed flex-1">{notification.text}</p>
           </div>
         </div>
       )}
 
-      {/* Main Header */}
-      <Header
-        grade={selectedGrade}
-        subject={selectedSubject}
+      {/* Modern Sidebar (st.sidebar style) */}
+      <AppSidebar
+        selectedGrade={selectedGrade}
+        selectedSubject={selectedSubject}
+        selectedUnitId={selectedUnitId}
+        selectedLessonId={selectedLessonId}
+        customTopic={customTopic}
+        selectedBloomLevels={selectedBloomLevels}
+        isGenerating={isGenerating}
         activeTab={activeTab}
+        isOpenOnMobile={isSidebarOpenMobile}
+        questionsCount={questions.length}
+        onGradeChange={setSelectedGrade}
+        onSubjectChange={setSelectedSubject}
+        onUnitChange={setSelectedUnitId}
+        onLessonChange={setSelectedLessonId}
+        onCustomTopicChange={setCustomTopic}
+        onToggleBloomLevel={handleToggleBloomLevel}
+        onGenerate={handleGenerateQuestions}
         setActiveTab={setActiveTab}
         onOpenPrint={() => setIsPrintModalOpen(true)}
-        onOpenAuth={(mode) => setAuthModalState({ isOpen: true, mode })}
+        onCloseMobile={() => setIsSidebarOpenMobile(false)}
       />
 
-      {/* Main Content Body */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      {/* Main App Workspace (Offset by sidebar width on desktop) */}
+      <div className="flex-1 flex flex-col min-w-0 lg:mr-72 xl:mr-80 transition-all duration-300">
         
-        {/* TAB 1: Questions & Assessment */}
-        {activeTab === 'questions' && (
-          <div className="space-y-6">
+        {/* Top Minimalist Header */}
+        <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-3.5 shadow-xs">
+          <div className="flex items-center justify-between gap-3">
             
-            {/* Curriculum Selector Toolbar */}
-            <CurriculumSelector
-              selectedGrade={selectedGrade}
-              selectedSubject={selectedSubject}
-              selectedUnitId={selectedUnitId}
-              selectedLessonId={selectedLessonId}
-              customTopic={customTopic}
-              selectedBloomLevels={selectedBloomLevels}
-              isGenerating={isGenerating}
-              onGradeChange={(g) => {
-                setSelectedGrade(g);
-                // When grade changes, find first unit
-                const curr = OMANI_CURRICULUM.find((c) => c.grade === g && c.subject === selectedSubject);
-                if (curr && curr.units.length > 0) {
-                  setSelectedUnitId(curr.units[0].id);
-                  if (curr.units[0].lessons.length > 0) {
-                    setSelectedLessonId(curr.units[0].lessons[0].id);
-                  }
-                }
-              }}
-              onSubjectChange={(s) => {
-                setSelectedSubject(s);
-                const curr = OMANI_CURRICULUM.find((c) => c.grade === selectedGrade && c.subject === s);
-                if (curr && curr.units.length > 0) {
-                  setSelectedUnitId(curr.units[0].id);
-                  if (curr.units[0].lessons.length > 0) {
-                    setSelectedLessonId(curr.units[0].lessons[0].id);
-                  }
-                }
-              }}
-              onUnitChange={setSelectedUnitId}
-              onLessonChange={setSelectedLessonId}
-              onCustomTopicChange={setCustomTopic}
-              onToggleBloomLevel={handleToggleBloomLevel}
-              onGenerate={handleGenerateQuestions}
-            />
-
-            {/* Questions Header & Bloom Breakdown */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <h2 className="text-lg font-black text-slate-900">
-                    بنك الأسئلة التقويمية المصنفة (5 أسئلة معتمدة)
-                  </h2>
-                </div>
-                <p className="text-xs text-slate-700">
-                  موزعة حسب مستويات بلوم الستة • مجهزة بنماذج الإجابة وسلم الدرجات الوزاري
-                </p>
-              </div>
-
-              {/* Quick Action Badges */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('whiteboard')}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-all"
-                >
-                  <PenTool className="w-3.5 h-3.5 text-slate-700" />
-                  <span>فتح السبورة</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('tutor')}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold rounded-xl transition-all border border-teal-200"
-                >
-                  <MessageSquare className="w-3.5 h-3.5 text-teal-600" />
-                  <span>المدرس الذكي</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsPrintModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs"
-                >
-                  <Award className="w-3.5 h-3.5" />
-                  <span>طباعة الاختبار</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Questions Cards List */}
-            <div className="space-y-5">
-              {questions.map((q, idx) => (
-                <QuestionCard
-                  key={q.id || idx}
-                  question={q}
-                  index={idx}
-                  total={questions.length}
-                  subject={selectedSubject}
-                  grade={selectedGrade}
-                  onSendToWhiteboard={handleSendToWhiteboard}
-                  onAskTutor={handleAskTutor}
-                  onUpdateAnswer={handleUpdateStudentAnswer}
-                />
-              ))}
-            </div>
-
-          </div>
-        )}
-
-        {/* TAB 2: Smart Science Tutor */}
-        {activeTab === 'tutor' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-black text-slate-900">
-                  نافذة المدرس الذكي
-                </h2>
-                <p className="text-xs text-slate-700">
-                  مستشارك التربوي التفاعلي لمناهج سلطنة عُمان لمواد الفيزياء والكيمياء والأحياء
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('questions')}
-                  className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
-                >
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span>العودة للأسئلة</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('whiteboard')}
-                  className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-slate-800 text-white hover:bg-slate-900 rounded-xl transition-colors"
-                >
-                  <PenTool className="w-3.5 h-3.5" />
-                  <span>السبورة التفاعلية</span>
-                </button>
-              </div>
-            </div>
-
-            <SmartTutor
-              grade={selectedGrade}
-              subject={selectedSubject}
-              unitTitle={currentUnit?.title || ''}
-              lessonTitle={currentLesson?.title || ''}
-              activeQuestion={activeQuestionForTutor}
-              onOpenWhiteboardWithText={handleOpenWhiteboardWithText}
-            />
-          </div>
-        )}
-
-        {/* TAB 3: Interactive Whiteboard */}
-        {activeTab === 'whiteboard' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-black text-slate-900">
-                  السبورة العلمية التفاعلية
-                </h2>
-                <p className="text-xs text-slate-700">
-                  سبورة رقمية متكاملة للرسم البياني، متجهات القوى، تراكيب الذرات والمعادلات الكيميائية
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('questions')}
-                  className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
-                >
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span>العودة للأسئلة</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('tutor')}
-                  className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100 rounded-xl transition-colors"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>استشارة المدرس الذكي</span>
-                </button>
-              </div>
-            </div>
-
-            <InteractiveWhiteboard
-              initialText={whiteboardInitialText}
-              onClearInitialText={() => setWhiteboardInitialText('')}
-            />
-          </div>
-        )}
-
-        {/* TAB 4: Bloom Level Educational Guide */}
-        {activeTab === 'guide' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-black text-slate-900">
-                  دليل تصنيف بلوم للأهداف التعليمية
-                </h2>
-                <p className="text-xs text-slate-700">
-                  المستويات المعرفية الستة وصياغة الأسئلة الامتحانية وفق المعايير الدولية والوطنية
-                </p>
-              </div>
-
+            {/* Right side: Mobile Menu Toggle & Clean Breadcrumb */}
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <button
                 type="button"
-                onClick={() => setActiveTab('questions')}
-                className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition-colors shadow-xs"
+                onClick={() => setIsSidebarOpenMobile(true)}
+                className="p-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 lg:hidden shrink-0"
+                title="فتح القائمة الجانبية"
               >
-                <BookOpen className="w-3.5 h-3.5" />
-                <span>الذهاب لأسئلة الاختبار</span>
+                <Menu className="w-5 h-5" />
+              </button>
+
+              {/* Breadcrumb path */}
+              <div className="flex items-center gap-1.5 text-xs text-slate-600 truncate">
+                <div className="flex items-center gap-1 font-bold text-slate-900 shrink-0">
+                  <Compass className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>الصف {selectedGrade === 10 ? 'العاشر' : selectedGrade === 11 ? 'الحادي عشر' : 'الثاني عشر'}</span>
+                </div>
+                <span className="text-slate-300 shrink-0">/</span>
+                <span className={`font-bold ${currentSubjectMeta.color} shrink-0`}>
+                  {currentSubjectMeta.nameAr}
+                </span>
+                <span className="text-slate-300 hidden sm:inline shrink-0">/</span>
+                <span className="truncate hidden sm:inline text-slate-700 font-medium">
+                  {currentUnit?.title}
+                </span>
+                <span className="text-slate-300 hidden md:inline shrink-0">/</span>
+                <span className="truncate hidden md:inline text-emerald-700 font-bold">
+                  {currentLesson?.title}
+                </span>
+              </div>
+            </div>
+
+            {/* Left side: Action Shortcuts & User Badge */}
+            <div className="flex items-center gap-2 shrink-0">
+              
+              {/* Thawani Subscription Pill */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('subscription')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold border transition-all ${
+                  isSubscribed
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                    : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 animate-pulse'
+                }`}
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">
+                  {isSubscribed ? 'اشتراك ثواني نشط' : 'تفعيل الاشتراك (ثواني)'}
+                </span>
+                <span className="sm:hidden">
+                  {isSubscribed ? 'مشترك' : 'تفعيل'}
+                </span>
+              </button>
+
+              {/* Print Exam Button */}
+              <button
+                type="button"
+                onClick={() => setIsPrintModalOpen(true)}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold transition-colors"
+              >
+                <Printer className="w-3.5 h-3.5 text-slate-600" />
+                <span>طباعة الاختبار</span>
+              </button>
+
+              {/* Quick Tutor Button */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('tutor')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                  activeTab === 'tutor'
+                    ? 'bg-teal-700 text-white shadow-xs'
+                    : 'bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">المدرّس الذكي</span>
               </button>
             </div>
 
-            <BloomLevelGuide />
           </div>
-        )}
+        </header>
 
-      </main>
+        {/* Dynamic Main Workspace Container */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
+          
+          {/* TAB 1: QUESTIONS & EVALUATION */}
+          {activeTab === 'questions' && (
+            <div className="space-y-6">
+              
+              {/* Context Summary Card */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 mb-2">
+                    <span>{currentUnit?.title}</span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 mb-1">
+                    {currentLesson?.title}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-600">
+                    بنك أسئلة كامبريدج المصنفة وفق مستويات بلوم الستة (التذكر، الفهم، التطبيق، التحليل، والتقييم)
+                  </p>
+                </div>
 
-      {/* Printable Exam Paper Modal */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    disabled={isGenerating}
+                    onClick={handleGenerateQuestions}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 active:scale-98 transition-all disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
+                    <span>توليد أسئلة جديدة</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsPrintModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span className="hidden sm:inline">طباعة الاختبار الوزاري</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Questions List */}
+              <div className="space-y-4">
+                {questions.map((question) => (
+                  <QuestionCard
+                    key={question.id}
+                    question={question}
+                    onUpdateAnswer={handleUpdateStudentAnswer}
+                    onSendToWhiteboard={handleSendToWhiteboard}
+                    onAskTutor={handleAskTutor}
+                  />
+                ))}
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 2: SMART AI TUTOR */}
+          {activeTab === 'tutor' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">
+                    المدرّس العلمي الذكي (AI Science Tutor)
+                  </h2>
+                  <p className="text-xs text-slate-600">
+                    شرح المفاهيم الصعبة، استراتيجيات الحل، وبحث مباشر في الويب عبر SerpApi لدعم مناهج كامبريدج
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('questions')}
+                  className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>العودة للأسئلة</span>
+                </button>
+              </div>
+
+              <SmartTutor
+                grade={selectedGrade}
+                subject={selectedSubject}
+                currentUnitTitle={currentUnit?.title || ''}
+                currentLessonTitle={currentLesson?.title || ''}
+                activeQuestion={activeQuestionForTutor}
+                onSendToWhiteboard={handleOpenWhiteboardWithText}
+              />
+            </div>
+          )}
+
+          {/* TAB 3: INTERACTIVE WHITEBOARD */}
+          {activeTab === 'whiteboard' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">
+                    السبورة العلمية التفاعلية
+                  </h2>
+                  <p className="text-xs text-slate-600">
+                    سبورة رقمية متكاملة للرسم البياني، متجهات القوى، تراكيب الذرات والمعادلات الكيميائية
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('questions')}
+                    className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>العودة للأسئلة</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('tutor')}
+                    className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100 rounded-xl transition-colors"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>استشارة المعلم الذكي</span>
+                  </button>
+                </div>
+              </div>
+
+              <InteractiveWhiteboard
+                initialText={whiteboardInitialText}
+                onClearInitialText={() => setWhiteboardInitialText('')}
+              />
+            </div>
+          )}
+
+          {/* TAB 4: BLOOM GUIDE */}
+          {activeTab === 'guide' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">
+                    دليل تصنيف بلوم للأهداف التعليمية
+                  </h2>
+                  <p className="text-xs text-slate-600">
+                    المستويات المعرفية الستة وصياغة الأسئلة الامتحانية وفق المعايير الدولية والوطنية
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('questions')}
+                  className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition-colors shadow-xs"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>الذهاب لأسئلة الاختبار</span>
+                </button>
+              </div>
+
+              <BloomLevelGuide />
+            </div>
+          )}
+
+          {/* TAB 5: SUBSCRIPTION & THAWANI PAY DASHBOARD */}
+          {activeTab === 'subscription' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">
+                    إدارة الاشتراك وبوابة ثواني للدفع الإلكتروني
+                  </h2>
+                  <p className="text-xs text-slate-600">
+                    تفعيل الحساب، متابعة الباقة، والدفع الإلكتروني المباشر في سلطنة عُمان
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('questions')}
+                  className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>العودة للوحة الأسئلة</span>
+                </button>
+              </div>
+
+              <SubscriptionScreen isModal={false} />
+            </div>
+          )}
+
+        </main>
+
+        {/* Simple Clean Footer */}
+        <footer className="border-t border-slate-200 bg-white py-4 px-6 mt-auto print:hidden text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-slate-800">بَلُوم للعلوم</span>
+            <span>•</span>
+            <span>مناهج كامبريدج بسلطنة عُمان 🇴🇲</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span>إعداد وتطوير:</span>
+            <strong className="text-slate-800 font-bold">فراس بن ماجد بن سالم البادي</strong>
+            <span className="text-slate-300">|</span>
+            <span className="text-emerald-700 font-medium">طالب جامعة نزوى</span>
+          </div>
+        </footer>
+
+      </div>
+
+      {/* Printable Exam Modal */}
       <PrintModal
         isOpen={isPrintModalOpen}
         onClose={() => setIsPrintModalOpen(false)}
@@ -524,37 +648,17 @@ export default function App() {
         lessonTitle={currentLesson?.title || ''}
       />
 
-      {/* Login & Register Authentication Modal */}
-      <AuthModal
-        isOpen={authModalState.isOpen}
-        initialMode={authModalState.mode}
-        onClose={() => setAuthModalState({ ...authModalState, isOpen: false })}
-      />
-
-      {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white py-6 mt-12 print:hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-700">
-          <div className="flex flex-col sm:flex-row items-center gap-2 text-center sm:text-right">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-900 text-sm">بلوم للعلوم</span>
-              <span>•</span>
-              <span>مبادرة تعليمية ذكية لطلبة المرحلة الثانوية بسلطنة عُمان 🇴🇲</span>
-            </div>
-            <div className="hidden sm:inline text-slate-300">•</div>
-            <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-900 px-3 py-1 rounded-lg border border-emerald-200 font-medium">
-              <span>إعداد وتطوير:</span>
-              <strong className="font-bold text-emerald-950">فراس بن ماجد بن سالم البادي</strong>
-              <span className="text-emerald-400">|</span>
-              <span className="text-emerald-800">طالب جامعة نزوى</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-slate-700">
-            <span>الفيزياء • الكيمياء • الأحياء</span>
-            <span>•</span>
-            <span>مستويات بلوم الستة</span>
+      {/* Welcome Subscription Modal (shown if new student wants to activate immediately) */}
+      {showWelcomeSubscriptionModal && !isSubscribed && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
+          <div className="max-w-3xl w-full">
+            <SubscriptionScreen
+              isModal={true}
+              onComplete={() => setShowWelcomeSubscriptionModal(false)}
+            />
           </div>
         </div>
-      </footer>
+      )}
 
     </div>
   );

@@ -17,6 +17,8 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
   register: (email: string, pass: string, name: string, role: UserRole, grade?: Grade, school?: string) => Promise<void>;
+  activateSubscription: (plan: 'free_trial' | 'semester' | 'annual', method: 'thawani' | 'school_voucher' | 'free_trial') => Promise<void>;
+  loginAsDemo: (name?: string, role?: UserRole, grade?: Grade) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -106,13 +108,99 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUserProfile(newProfile);
   };
 
+  const activateSubscription = async (
+    plan: 'free_trial' | 'semester' | 'annual', 
+    method: 'thawani' | 'school_voucher' | 'free_trial'
+  ) => {
+    const expiresDays = plan === 'annual' ? 365 : plan === 'semester' ? 120 : 14;
+    const expiresAt = new Date(Date.now() + expiresDays * 24 * 60 * 60 * 1000).toISOString();
+
+    const updated = {
+      isSubscribed: true,
+      subscriptionPlan: plan,
+      subscriptionPaymentMethod: method,
+      subscriptionExpiresAt: expiresAt,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (currentUser) {
+      try {
+        const userRef = doc(db, 'users', currentUser.uid);
+        await setDoc(userRef, updated, { merge: true });
+      } catch (err) {
+        console.warn('Could not sync subscription to firestore:', err);
+      }
+    }
+
+    setUserProfile((prev) => {
+      if (!prev) {
+        return {
+          uid: currentUser?.uid || 'demo-user',
+          email: currentUser?.email || 'student@edu.om',
+          displayName: currentUser?.displayName || 'طالب عُماني متميز',
+          role: 'student',
+          grade: 10,
+          ...updated,
+        };
+      }
+      return {
+        ...prev,
+        ...updated,
+      };
+    });
+  };
+
+  const loginAsDemo = async (
+    name = 'طالب عُماني تجريبي', 
+    role: UserRole = 'student', 
+    grade: Grade = 10
+  ) => {
+    // Demo user for testing and evaluation without credentials
+    const demoProfile: UserProfile = {
+      uid: 'demo-' + Date.now(),
+      email: 'demo.student@edu.om',
+      displayName: name,
+      role,
+      grade,
+      school: 'مدرسة السلطان قابوس النموذجية - مسقط',
+      isSubscribed: false, // will ask to subscribe or allow trial
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Fake mock user to satisfy currentUser checks
+    const fakeUser = {
+      uid: demoProfile.uid,
+      email: demoProfile.email,
+      displayName: demoProfile.displayName,
+      emailVerified: true,
+    } as unknown as User;
+
+    setCurrentUser(fakeUser);
+    setUserProfile(demoProfile);
+  };
+
   const logout = async () => {
-    await signOut(auth);
+    try {
+      await signOut(auth);
+    } catch {
+      // ignore
+    }
+    setCurrentUser(null);
     setUserProfile(null);
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, userProfile, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ 
+      currentUser, 
+      userProfile, 
+      loading, 
+      login, 
+      register, 
+      activateSubscription, 
+      loginAsDemo, 
+      logout 
+    }}>
       {children}
     </AuthContext.Provider>
   );

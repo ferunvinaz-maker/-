@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChatMessage, Grade, Subject, Question, TutorMode } from '../types';
+import { ChatMessage, Grade, Subject, Question, TutorMode, WebSource } from '../types';
 import { 
   Bot, 
   Send, 
@@ -12,7 +12,10 @@ import {
   FlaskConical, 
   PenTool, 
   RotateCcw,
-  BookOpen
+  BookOpen,
+  Globe,
+  ExternalLink,
+  Search
 } from 'lucide-react';
 import { SUBJECT_METADATA } from '../data/curriculumData';
 
@@ -40,7 +43,7 @@ export const SmartTutor: React.FC<SmartTutorProps> = ({
       text: `مرحباً بك يا بطل العلوم! أنا "معلمك الذكي" لمناهج كامبريدج في سلطنة عمان.
 أنا هنا لمساعدتك في فهم المفاهيم الصعبة لمادة ${SUBJECT_METADATA[subject].nameAr} للصف ${grade === 10 ? 'العاشر' : grade === 11 ? 'الحادي عشر' : 'الثاني عشر'}، حل المسائل خطوة بخطوة، أو الاستعداد للتجارب العملية.
 
-ما الذي تود أن نبدأ به اليوم؟`,
+✨ ميزة البحث المباشر في الويب (SerpApi) مفعّلة لجلب أحدث الاكتشافات والمعلومات العلمية فوراً! ما الذي تود أن نبدأ به اليوم؟`,
       timestamp: Date.now(),
     },
   ]);
@@ -49,8 +52,22 @@ export const SmartTutor: React.FC<SmartTutorProps> = ({
   const [mode, setMode] = useState<TutorMode>('explain');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [isWebSearchEnabled, setIsWebSearchEnabled] = useState<boolean>(true);
+  const [hasSerpApiKey, setHasSerpApiKey] = useState<boolean>(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Check health and SerpApi status
+  useEffect(() => {
+    fetch('/api/health')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.hasSerpApiKey === 'boolean') {
+          setHasSerpApiKey(data.hasSerpApiKey);
+        }
+      })
+      .catch((err) => console.warn('Health check fetch error:', err));
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -135,6 +152,7 @@ export const SmartTutor: React.FC<SmartTutorProps> = ({
         body: JSON.stringify({
           message: query,
           conversationHistory: messages,
+          enableWebSearch: isWebSearchEnabled,
           context: {
             grade,
             subject: SUBJECT_METADATA[subject].nameAr,
@@ -155,6 +173,8 @@ export const SmartTutor: React.FC<SmartTutorProps> = ({
         text: tutorReply,
         timestamp: Date.now(),
         mode,
+        isWebSearchUsed: !!data.isWebSearchUsed,
+        webSources: data.webSources || [],
       };
 
       setMessages((prev) => [...prev, tutorMsg]);
@@ -189,11 +209,12 @@ export const SmartTutor: React.FC<SmartTutorProps> = ({
   };
 
   const quickPills = [
+    { label: '🌐 أحدث الاكتشافات العلمية', prompt: `ابحث في الإنترنت عن أحدث الاكتشافات العلمية والتطبيقات الحديثة لدرس (${lessonTitle}).` },
+    { label: '🇴🇲 أحدث المشاريع في سلطنة عُمان', prompt: `ابحث في الإنترنت عن مشاريع سلطنة عُمان الحديثة والمبادرات الوطنية المرتبطة بموضوع (${lessonTitle}).` },
     { label: '🌟 شرح مبسط للمفهوم', prompt: `اشرح لي درس (${lessonTitle}) بأسلوب مبسط مدعوماً بأمثلة تطبيقية.` },
     { label: '💡 تلميح سقراطي', prompt: 'اطرح عليّ أسئلة سقراطية متدرجة تقودني لاكتشاف الحل بنفسي.' },
     { label: '📐 مسألة تطبيقية خطوة بخطوة', prompt: 'أعطني مسألة حسابية نموذجية على هذا الدرس مع خطوات الحل التفصيلية.' },
     { label: '🔬 تجربة معملية ومصادر الخطأ', prompt: 'ما هي التجربة المعملية الرئيسية لهذا الدرس وما أبرز مصادر الخطأ التجريبي واحتياطات السلامة؟' },
-    { label: '🇴🇲 ربط بالبيئة العمانية', prompt: 'كيف يرتبط هذا المفهوم العلمي بظاهرة طبيعية أو مشروع صناعي في سلطنة عُمان؟' },
   ];
 
   return (
@@ -223,14 +244,34 @@ export const SmartTutor: React.FC<SmartTutorProps> = ({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleClearChat}
-          title="مسح المحادثة وبدء جلسة جديدة"
-          className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-teal-200 transition-colors"
-        >
-          <RotateCcw className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* SerpApi Search Toggle */}
+          <button
+            type="button"
+            onClick={() => setIsWebSearchEnabled(!isWebSearchEnabled)}
+            title={isWebSearchEnabled ? 'بحث الويب المباشر نشط (SerpApi) - انقر للتعطيل' : 'انقر لتفعيل البحث المباشر في الويب (SerpApi)'}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+              isWebSearchEnabled
+                ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/40 hover:bg-emerald-500/30 shadow-xs'
+                : 'bg-white/10 text-slate-300 border-white/20 hover:bg-white/20'
+            }`}
+          >
+            <Globe className={`w-3.5 h-3.5 ${isWebSearchEnabled ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
+            <span className="hidden sm:inline">بحث الويب (SerpApi):</span>
+            <span className={isWebSearchEnabled ? 'text-emerald-300' : 'text-slate-400'}>
+              {isWebSearchEnabled ? 'مفعّل' : 'معطّل'}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleClearChat}
+            title="مسح المحادثة وبدء جلسة جديدة"
+            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-teal-200 transition-colors"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Mode Selector */}
@@ -319,6 +360,39 @@ export const SmartTutor: React.FC<SmartTutorProps> = ({
                   {msg.text}
                 </div>
 
+                {/* SerpApi Real-time Web Sources */}
+                {isTutor && msg.isWebSearchUsed && msg.webSources && msg.webSources.length > 0 && (
+                  <div className="mt-3 pt-2.5 border-t border-slate-100 bg-emerald-50/60 -mx-4 -mb-4 p-3 rounded-b-2xl border-t border-emerald-100">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 mb-2">
+                      <Globe className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
+                      <span>أحدث المعلومات والمصادر المباشرة من الإنترنت (SerpApi):</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {msg.webSources.map((source, sIdx) => (
+                        <a
+                          key={sIdx}
+                          href={source.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-start justify-between gap-2 p-2 rounded-lg bg-white border border-emerald-200/90 hover:border-emerald-400 hover:bg-emerald-50 text-xs transition-all group shadow-2xs"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-slate-800 group-hover:text-emerald-900 line-clamp-1">
+                              {source.title}
+                            </div>
+                            {source.snippet && (
+                              <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
+                                {source.snippet}
+                              </p>
+                            )}
+                          </div>
+                          <ExternalLink className="w-3.5 h-3.5 text-emerald-600 shrink-0 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform mt-0.5" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Tutor Message Utility Toolbar */}
                 {isTutor && (
                   <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-700">
@@ -370,11 +444,20 @@ export const SmartTutor: React.FC<SmartTutorProps> = ({
             <div className="w-9 h-9 rounded-xl bg-teal-700 text-white flex items-center justify-center shrink-0 shadow-xs">
               <Bot className="w-5 h-5 animate-spin" />
             </div>
-            <div className="bg-white border border-slate-200 rounded-2xl rounded-tr-xs p-3.5 shadow-xs flex items-center gap-2 text-xs text-slate-500">
+            <div className="bg-white border border-slate-200 rounded-2xl rounded-tr-xs p-3.5 shadow-xs flex items-center gap-2 text-xs text-slate-600">
               <span className="w-2 h-2 rounded-full bg-teal-600 animate-bounce" />
               <span className="w-2 h-2 rounded-full bg-teal-600 animate-bounce [animation-delay:0.2s]" />
               <span className="w-2 h-2 rounded-full bg-teal-600 animate-bounce [animation-delay:0.4s]" />
-              <span className="mr-1">المعلم الذكي يكتب الإجابة...</span>
+              <span className="mr-1 font-medium flex items-center gap-1.5">
+                {isWebSearchEnabled ? (
+                  <>
+                    <Globe className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
+                    <span>المعلم الذكي يبحث في الإنترنت (SerpApi) ويصيغ الإجابة...</span>
+                  </>
+                ) : (
+                  <span>المعلم الذكي يكتب الإجابة...</span>
+                )}
+              </span>
             </div>
           </div>
         )}

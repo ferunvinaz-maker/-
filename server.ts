@@ -40,8 +40,131 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     hasApiKey: !!process.env.GEMINI_API_KEY,
+    hasSerpApiKey: !!process.env.SERPAPI_API_KEY,
     timestamp: new Date().toISOString(),
   });
+});
+
+interface WebSearchSource {
+  title: string;
+  link: string;
+  snippet?: string;
+}
+
+interface SerpApiSearchResult {
+  sources: WebSearchSource[];
+  summaryText: string;
+}
+
+// SerpApi Search Integration Function
+async function searchWithSerpApi(query: string): Promise<SerpApiSearchResult | null> {
+  const apiKey = process.env.SERPAPI_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+
+  try {
+    const url = new URL('https://serpapi.com/search.json');
+    url.searchParams.set('engine', 'google');
+    url.searchParams.set('q', query);
+    url.searchParams.set('api_key', apiKey);
+    url.searchParams.set('hl', 'ar');
+    url.searchParams.set('gl', 'om');
+    url.searchParams.set('num', '5');
+
+    const res = await fetch(url.toString(), {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!res.ok) {
+      console.warn(`SerpApi request failed with status: ${res.status}`);
+      return null;
+    }
+
+    const data: any = await res.json();
+    const sources: WebSearchSource[] = [];
+    const snippets: string[] = [];
+
+    // 1. Check Answer Box / Direct Answer
+    if (data.answer_box) {
+      const box = data.answer_box;
+      const answer = box.answer || box.snippet || box.title || '';
+      if (answer) {
+        snippets.push(`[إجابة سريعة من Google]: ${answer}`);
+        if (box.link) {
+          sources.push({
+            title: box.title || 'إجابة مباشرة من محرك البحث',
+            link: box.link,
+            snippet: answer,
+          });
+        }
+      }
+    }
+
+    // 2. Check Knowledge Graph
+    if (data.knowledge_graph) {
+      const kg = data.knowledge_graph;
+      const title = kg.title || '';
+      const desc = kg.description || '';
+      if (title || desc) {
+        snippets.push(`[لوحة المعرفة]: ${title} - ${desc}`);
+        if (kg.source?.link) {
+          sources.push({
+            title: title || 'معلومات موثقة',
+            link: kg.source.link,
+            snippet: desc,
+          });
+        }
+      }
+    }
+
+    // 3. Check Organic Results
+    if (Array.isArray(data.organic_results)) {
+      for (const item of data.organic_results.slice(0, 4)) {
+        if (item.title && item.link) {
+          const snip = item.snippet || '';
+          sources.push({
+            title: item.title,
+            link: item.link,
+            snippet: snip,
+          });
+          snippets.push(`- مصدر: "${item.title}"\n  مقتطف: ${snip}\n  رابط: ${item.link}`);
+        }
+      }
+    }
+
+    if (sources.length === 0 && snippets.length === 0) {
+      return null;
+    }
+
+    return {
+      sources,
+      summaryText: snippets.join('\n\n'),
+    };
+  } catch (error) {
+    console.error('Error executing SerpApi web search:', error);
+    return null;
+  }
+}
+
+// Standalone Web Search endpoint
+app.post('/api/search', async (req, res) => {
+  try {
+    const { query } = req.body;
+    if (!query || typeof query !== 'string') {
+      return res.status(400).json({ error: 'يرجى تقديم استعلام البحث' });
+    }
+    const result = await searchWithSerpApi(query);
+    return res.json({
+      success: !!result,
+      hasKey: !!process.env.SERPAPI_API_KEY,
+      result,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
 });
 
 // API endpoint: Generate 5 Bloom-taxonomy classified questions
@@ -65,6 +188,7 @@ app.post('/api/generate-questions', async (req, res) => {
     }
 
     const systemPrompt = `أنت خبير تربوي ومستشار أول لمناهج كامبريدج المطبقة في سلطنة عمان لصفوف المرحلة الثانوية (10، 11، 12) في مواد العلوم (الفيزياء، الكيمياء، الأحياء).
+قاعدة صارمة وإلزامية: يجب الالتزام التام والحصري بقائمة الوحدات والدروس الرسمية المعتمدة في سلطنة عُمان، ولا يُسمح لك نهائياً بتأليف أو اختراع أو إضافة أي وحدة أو درس خارج المنهج المعتمد.
 مهمتك توليد 5 أسئلة علمية باللغة العربية الفصحى مع مصطلحات كامبريدج المعتمدة في عمان، موزعة بدقة على مستويات تصنيف بلوم للأهداف التعليمية:
 1. التذكر (Remembering): استرجاع تعريف، صيغة، وحدة، أو حقيقة علمية.
 2. الفهم (Understanding): تفسير، تعليل، مقارنة، توضيح سبب ظاهرة علمية.
@@ -73,7 +197,7 @@ app.post('/api/generate-questions', async (req, res) => {
 5. التقييم (Evaluating): نقد تجربة، تحديد مصادر خطأ عملي، أو تبرير اختيار علمي.
 6. الابتكار (Creating): تصميم تجربة أو اقتراح حل لمشكلة علمية أو بيئية.
 
-يجب أن تكون الأسئلة الـ 5 عالية الجودة، متوافقة بدقة مع مخرجات التعلم في سلطنة عمان، وتتضمن:
+يجب أن تكون الأسئلة الـ 5 عالية الجودة، متوافقة بدقة مع مخرجات التعلم في سلطنة عمان للدرس والوحدة المحددين، وتتضمن:
 - نص السؤال بدقة وصياغة امتحانية وزارية.
 - نموذج إجابة نموذجي مفصل يوضح خطوات الحل، القوانين، والتعويض الرياضي إن وجد.
 - معايير تصحيح (Rubric/Marking Scheme) بالدرجات لكل خطوة.
@@ -161,7 +285,12 @@ ${focusLevels && focusLevels.length > 0 ? `المستويات المستهدفة
 // API endpoint: Smart Science Tutor
 app.post('/api/smart-tutor', async (req, res) => {
   try {
-    const { message, conversationHistory = [], context } = req.body;
+    const { 
+      message, 
+      conversationHistory = [], 
+      context,
+      enableWebSearch = true 
+    } = req.body;
 
     const ai = getGenAI();
     if (!ai) {
@@ -188,6 +317,25 @@ app.post('/api/smart-tutor', async (req, res) => {
         modeInstruction = 'قدّم شرحاً علمياً سلساً ومبسّطاً: اربط المفهوم بأمثلة واقعية من البيئة العمانية والصناعات المحلية كلما أمكن، واستخدم تشبيهات تقرب الفكرة لعقل الطالب.';
     }
 
+    // Perform real-time web search via SerpApi if enabled and API key is present
+    let searchResult: SerpApiSearchResult | null = null;
+    if (enableWebSearch && process.env.SERPAPI_API_KEY && message) {
+      try {
+        const searchQuery = `${message.trim()} ${lessonTitle ? lessonTitle : subject}`.slice(0, 100);
+        searchResult = await searchWithSerpApi(searchQuery);
+      } catch (searchErr) {
+        console.warn('SerpApi search execution warning:', searchErr);
+      }
+    }
+
+    const webSearchContext = searchResult
+      ? `\n\n[أحدث نتائج البحث الحيّة من شبكة الإنترنت عبر محرك البحث Google / SerpApi]:
+${searchResult.summaryText}
+
+توجيه خاص بالبحث:
+لقد تم تزويدك بنتائج ومعلومات حية وموثقة من الإنترنت بناءً على استفسار الطالب. وظّف هذه النتائج لتقديم معلومات علمية دقيقة ومحدثة مع الإشارة إلى التطبيقات العلمية الحديثة ومصادر المعرفة الموثوقة بروح تربوية مشجعة.`
+      : '';
+
     const systemPrompt = `أنت "المعلم الذكي" في تطبيق 'بلوم للعلوم'، معلم علوم عماني ودود، متخصص وخبير في مناهج كامبريدج في سلطنة عمان للمرحلة الثانوية.
 أنت تتحدث مع طالب في الصف ${grade} يدرس مادة: ${subject}.
 الدرس الحالي: ${lessonTitle || 'درس العلوم'}${unitTitle ? ` ضمن ${unitTitle}` : ''}.
@@ -201,7 +349,8 @@ ${currentQuestion ? `سؤال الاختبار النشط الذي يدرسه ا
 2. تحدّث باللغة العربية الفصحى التربوية اللطيفة والواثقة، مشجعاً الطالب (يا بطل العلوم، يا عالم المستقبل، أحسنت التفكير...).
 3. استخدم الترميز الرياضي والعلمي الواضح (مثل الصيغ الكيميائية والوحدات: m/s, kg, mol, pH).
 4. حافظ على إجابات ذات طول معتدل ومنظمة في نقاط أو فقرات قصيرة سهلة القراءة.
-5. يمكنك تشجيع الطالب على استخدام "السبورة التفاعلية" لرسم المسألة أو المخطط البياني.`;
+5. يمكنك تشجيع الطالب على استخدام "السبورة التفاعلية" لرسم المسألة أو المخطط البياني.
+6. التزم التزاماً صارماً بوحدة ودرس المنهج العماني الرسمي المعتمد للطالب ولا تؤلف أو تبتكر وحدات أو دروساً خارجها.${webSearchContext}`;
 
     const chatHistory = conversationHistory.slice(-6).map((msg: any) => ({
       role: msg.sender === 'user' ? 'user' : 'model',
@@ -223,7 +372,11 @@ ${currentQuestion ? `سؤال الاختبار النشط الذي يدرسه ا
 
     const replyText = response.text || 'عذراً يا بطل، لم أستطع صياغة الإجابة بدقة، هل يمكنك إعادة صياغة سؤالك؟';
 
-    return res.json({ reply: replyText });
+    return res.json({ 
+      reply: replyText,
+      isWebSearchUsed: !!searchResult,
+      webSources: searchResult?.sources || [],
+    });
   } catch (error: any) {
     console.error('Error in smart tutor:', error);
     return res.status(500).json({

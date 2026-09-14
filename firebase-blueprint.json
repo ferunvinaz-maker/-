@@ -11,6 +11,10 @@
         "role": { "type": "string", "enum": ["student", "teacher"] },
         "grade": { "type": "number" },
         "school": { "type": "string" },
+        "isSubscribed": { "type": "boolean" },
+        "subscriptionPlan": { "type": "string" },
+        "subscriptionPaymentMethod": { "type": "string" },
+        "subscriptionExpiresAt": { "type": "string" },
         "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
